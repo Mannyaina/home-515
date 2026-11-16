@@ -269,6 +269,55 @@ function txRow(t){
 /* ---------- Supabase backend (515 live) ---------- */
 var SB_URL='https://msfwijsuzfwofpvpuwgc.supabase.co',SB_KEY='sb_publishable_N1tAw0fcjQ2aKHcsGnxuEw_KwPGc6QH',FN_URL=SB_URL+'/functions/v1/home-monzo',BUCKET='home515';
 var sb=null;
+/* ---------- phone notifications ---------- */
+var VAPID_PUBLIC='BCk-ccHYFq-RrAdgkt4yGDhVQeIlw0E4vf7ZC5fWR2XuawRTUHDlwQvhosmDRjMcakfIkDa9p7W3r5QXuGhjhh8';
+var swReg=null;
+function b64uToBytes(s){s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';var r=atob(s),a=new Uint8Array(r.length);for(var i=0;i<r.length;i++)a[i]=r.charCodeAt(i);return a}
+function isIOS(){return /iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)}
+function isStandalone(){return (window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true}
+function pushSupported(){return 'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window}
+async function getReg(){if(swReg)return swReg;if(!('serviceWorker' in navigator))return null;try{swReg=await navigator.serviceWorker.register('sw.js');await navigator.serviceWorker.ready;return swReg}catch(e){return null}}
+async function savePushSub(sub){var j=sub.toJSON();var r=await sb.from('home_push').upsert({endpoint:j.endpoint,email:S.session.user.email.toLowerCase(),name:S.me||'',sub:j,ua:navigator.userAgent.slice(0,160)});if(r.error)throw r.error}
+async function checkPush(){
+  var st={supported:pushSupported(),ios:isIOS(),standalone:isStandalone(),perm:('Notification' in window)?Notification.permission:'unsupported',on:false};
+  if(st.supported){var reg=await getReg();var sub=reg&&await reg.pushManager.getSubscription();if(sub&&st.perm==='granted'){st.on=true;try{await savePushSub(sub)}catch(e){}}}
+  S.push=st;render();
+}
+async function enablePush(){
+  if(!pushSupported()){toast(isIOS()?'Add 515 to your Home Screen first, then open it from there':'This browser can’t do notifications');return}
+  var perm=await Notification.requestPermission();
+  if(perm!=='granted'){S.push=Object.assign({},S.push,{perm:perm});render();toast(perm==='denied'?'Notifications are blocked — turn them on in Settings › Notifications › 515':'Notifications not turned on');return}
+  try{
+    var reg=await getReg();if(!reg)throw new Error('no sw');
+    var sub=await reg.pushManager.getSubscription();
+    if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64uToBytes(VAPID_PUBLIC)});
+    await savePushSub(sub);
+    S.push=Object.assign({},S.push,{perm:'granted',on:true});render();
+    toast('Notifications on');
+    try{await sb.functions.invoke('home-push',{body:{action:'test'}})}catch(e){}
+  }catch(e){toast('Couldn’t turn on notifications — try again');}
+}
+async function disablePush(){
+  try{var reg=await getReg();var sub=reg&&await reg.pushManager.getSubscription();if(sub){await sb.from('home_push').delete().eq('endpoint',sub.endpoint);await sub.unsubscribe()}}catch(e){}
+  S.push=Object.assign({},S.push,{on:false});render();toast('Notifications off on this phone');
+}
+function pushCard(){
+  var p=S.push;if(!p||p.on||LS.get('515-push-later','')||p.perm==='denied')return '';
+  var needHome=p.ios&&!p.standalone;
+  if(!needHome&&!p.supported)return '';
+  return '<div class="card" style="display:flex;flex-direction:column;gap:10px"><span class="name" style="font-size:16px">Get 515 updates on your phone</span><span class="muted" style="font-size:14px">'+(needHome?'Add 515 to your Home Screen first: tap Share, then “Add to Home Screen”. Open it from there and you’ll see a button here.':'When '+esc(other())+' adds to the list, ticks off a to-do or leaves a note — and when the joint account moves — you’ll get a notification, even with 515 closed.')+'</span><div class="row" style="gap:8px">'+(needHome?'':'<button class="btn" data-act="pushOn">Turn on</button>')+'<button class="btn ghost" data-act="pushLater">Not now</button></div></div>';
+}
+function pushSettings(){
+  var p=S.push||{};var o='<p class="label" style="margin-top:6px">Notifications on this phone</p>';
+  if(p.on)o+='<p class="sub" style="margin:0">On. You’ll get updates from '+esc(other())+' and the joint account.</p><div class="row" style="gap:8px"><button class="btn ghost" data-act="pushTest">Send a test</button><button class="btn ghost" data-act="pushOff">Turn off</button></div>';
+  else if(p.ios&&!p.standalone)o+='<p class="sub" style="margin:0">Open 515 from your Home Screen to turn these on.</p>';
+  else if(p.perm==='denied')o+='<p class="sub" style="margin:0">Blocked. Turn them on in Settings › Notifications › 515, then come back here.</p>';
+  else if(p.supported)o+='<button class="btn block" data-act="pushOn">Turn on notifications</button>';
+  else o+='<p class="sub" style="margin:0">This browser can’t show notifications.</p>';
+  return o;
+}
+function goHash(h){var m={'#todo':'todo','#shop':'shop','#money':'money','#vault':'vault','#home':'home'};if(m[h]){S.tab=m[h];S.sheet=null;if(h==='#money')S.monthOff=0;try{history.replaceState(null,'',location.pathname)}catch(e){}render();window.scrollTo(0,0);return true}return false}
+
 function rid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,10)}
 function makeDb(){
   var cache={},ready=false,listeners=[];
@@ -355,6 +404,7 @@ function accountSheet(){
   o+='<form data-form="addMember" style="display:flex;flex-direction:column;gap:10px"><p class="label" style="margin-top:6px">Add someone</p><div class="two"><div class="field"><label for="a-name">Name</label><input id="a-name" maxlength="30" placeholder="Dee" required></div><div class="field"><label for="a-email">Email</label><input id="a-email" type="email" placeholder="name@example.com" required></div></div><button class="btn block" type="submit">Add to household</button></form>';
   o+='<p class="sub" style="margin:0">Once added, they open 515 in Safari, tap “Email me a login link”, then set a password for the home-screen app.</p>';
   o+='<form data-form="setPw" style="display:flex;flex-direction:column;gap:10px"><p class="label" style="margin-top:6px">Password for the home-screen app</p><div class="two"><div class="field"><label for="p-new">New password</label><input id="p-new" type="password" autocomplete="new-password" minlength="8"></div><div class="field"><label for="p-new2">Type it again</label><input id="p-new2" type="password" autocomplete="new-password" minlength="8"></div></div><button class="btn ghost block" type="submit">Set password</button></form>';
+  o+=pushSettings();
   o+='<button class="btn danger block" data-act="signOut">Log out</button>';
   return {title:'You & your household',body:o};
 }
@@ -555,6 +605,7 @@ function home(){
   if(!notLoaded&&!S.items.length&&!S.bills.length&&!(S.vault||[]).length){
     o+='<div class="card empty"><p class="h2">Welcome home</p><p class="muted" style="margin:0;font-size:14px">Nothing here yet. Snap something for the shopping wall, leave a fridge note, or fill it with examples to have a play.</p><button class="btn" data-act="examples">Fill with examples</button></div>';
   }
+  o+=pushCard();
   var shown=0;L.order.forEach(function(k){if(!L.hidden[k]){o+=homeSec(k);shown++}});
   if(!shown)o+='<div class="card empty"><p class="muted" style="margin:0">Everything’s hidden. Tap “Customise home” to bring sections back.</p></div>';
   var ex=S.bills.some(function(b){return b.example})||S.items.some(function(i){return i.example});
@@ -927,6 +978,10 @@ document.addEventListener('click',async function(e){
   if(a==='backdrop'){if(e.target===el){S.sheet=null;render()}return}
     if(a==='who'){S.me=S.me==='Manny'?'Dee':S.me==='Dee'?'Manny':'';if(S.me)LS.set('515-me',S.me);render();return}
   if(a==='setMe'){S.me=val;LS.set('515-me',val);render();return}
+  if(a==='pushOn'){await enablePush();return}
+  if(a==='pushOff'){await disablePush();return}
+  if(a==='pushLater'){LS.set('515-push-later','1');render();toast('You can turn them on any time under You');return}
+  if(a==='pushTest'){var tr=await sb.functions.invoke('home-push',{body:{action:'test'}});toast(tr.error?'Test didn\u2019t send \u2014 try turning notifications off and on':'Test sent \u2014 check your lock screen');return}
   if(a==='tab'){S.tab=val;if(val==='money'&&S.tab==='money'&&e.isTrusted&&el.closest('main'))S.monthOff=0;S.sheet=null;render();window.scrollTo(0,0);return}
   if(a==='month'){S.monthOff+=Number(val);render();return}
   if(a==='filter'){S.shopFilter=val;render();return}
@@ -1028,13 +1083,16 @@ async function startApp(){
   db.doc('finance/prefs').onSnapshot(function(d){S.finPrefs=d.exists?d.data():{};render()});
   db.doc('finance/status').onSnapshot(function(d){S.mstat=d.exists?d.data():null;render()});
   db.doc('home/note').onSnapshot(function(d){S.note=d.exists?d.data():null;render()});
-  var hsh=location.hash;
+  checkPush();
+  var hsh=location.hash;goHash(hsh);
   if(hsh==='#monzo-approve'||hsh==='#monzo-error'){S.tab='money';S.mview='account';if(hsh==='#monzo-approve')S.monzoApprove=true;else setTimeout(function(){toast('The Monzo connection didn\u2019t finish \u2014 please try again.')},300);try{history.replaceState(null,'',location.pathname)}catch(e){}}
   render();
 }
 (async function(){
   render();
   if(!window.supabase){S.authReady=true;S.session={user:{email:''}};S.noDb=true;render();return}
+  if('serviceWorker' in navigator){getReg();navigator.serviceWorker.addEventListener('message',function(ev){if(ev.data&&ev.data.type==='go'){try{goHash(new URL(ev.data.url).hash)}catch(e){}}})}
+  window.addEventListener('hashchange',function(){goHash(location.hash)});
   sb=window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
   sb.auth.onAuthStateChange(function(ev,session){S.session=session;S.authReady=true;if(session)setTimeout(startApp,0);else{started=false;render()}});
   var r=await sb.auth.getSession();S.session=r.data.session;S.authReady=true;if(S.session)startApp();else render();
