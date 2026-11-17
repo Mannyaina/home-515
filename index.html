@@ -14,6 +14,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <style>
 /* keep content clear of the iPhone status bar / notch */
+html,body{overscroll-behavior:none}
+body.kb .nav{display:none}
 body{padding-top:env(safe-area-inset-top);padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
 .safe-top{position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top);background:var(--bg);z-index:15;pointer-events:none}
 .toast{bottom:calc(110px + env(safe-area-inset-bottom))}
@@ -172,6 +174,7 @@ function monthKey(off){var d=new Date();d.setDate(1);d.setMonth(d.getMonth()+off
 function mInfo(key){var p=key.split('-').map(Number);var d=new Date(p[0],p[1]-1,1);return {y:p[0],m:p[1],days:new Date(p[0],p[1],0).getDate(),name:d.toLocaleString('en-GB',{month:'long'}),short:d.toLocaleString('en-GB',{month:'short'}).toUpperCase()}}
 function ord(n){var s=['th','st','nd','rd'],v=n%100;return n+(s[(v-20)%10]||s[v]||s[0])}
 function applies(b,key){if(b.repeat==='once')return b.month===key;if(b.repeat==='yearly')return !!b.month&&b.month.slice(5)===key.slice(5)&&b.month<=key;return !b.start||b.start<=key}
+function billDateVal(b,key){var mo=b.repeat&&b.repeat!=='monthly'?(b.month||key):(b.start&&b.start>key?b.start:key);if(!b.day)return '';var i=mInfo(mo);return mo+'-'+String(Math.min(Number(b.day)||1,i.days)).padStart(2,'0')}
 function billsFor(key){var info=mInfo(key);return S.bills.filter(function(b){return applies(b,key)}).map(function(b){var p=b.paid&&b.paid[key];return Object.assign({},b,{dueDay:Math.min(Number(b.day)||1,info.days),isPaid:!!p,paidInfo:p||null})}).sort(function(a,b){return a.dueDay-b.dueDay})}
 function ago(ts){if(!ts)return '';var s=(Date.now()-ts)/1000;if(s<60)return 'just now';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';var d=Math.floor(s/86400);return d===1?'yesterday':d+' days ago'}
 function dayName(key,day){var i=mInfo(key);return new Date(i.y,i.m-1,day).toLocaleString('en-GB',{weekday:'short'})+' '+day}
@@ -460,6 +463,7 @@ async function storeFile(file){
 /* ---------- render ---------- */
 function render(){
   if(drag){render._pending=true;return}
+  var ae0=document.activeElement;if(ae0&&(ae0.tagName==='SELECT'||(ae0.tagName==='INPUT'&&/^(date|month|time|datetime-local)$/.test(ae0.type)))){render._deferred=true;return}
   document.body.setAttribute('data-theme',S.theme);
   var keep={},act=document.activeElement,focusId=act&&act.id,selS=null,selE=null;
   try{if(act&&act.selectionStart!=null){selS=act.selectionStart;selE=act.selectionEnd}}catch(e){}
@@ -911,9 +915,9 @@ function sheet(){
     o+=head(s.id?esc(b.name):'New bill');
     o+='<form data-form="bill" style="display:flex;flex-direction:column;gap:12px">';
     o+='<div class="field"><label for="f-name">Bill name</label><input id="f-name" required maxlength="60" placeholder="e.g. Council tax" value="'+esc(b.name||'')+'"></div>';
-    o+='<div class="two"><div class="field"><label for="f-amount">Amount (£)</label><input id="f-amount" type="number" inputmode="decimal" step="0.01" min="0" required value="'+esc(b.amount!=null?b.amount:'')+'"></div><div class="field"><label for="f-day">Due day of month</label><input id="f-day" type="number" inputmode="numeric" min="1" max="31" required value="'+esc(b.day||'')+'"></div></div>';
+    o+='<div class="two"><div class="field"><label for="f-amount">Amount (£)</label><input id="f-amount" type="number" inputmode="decimal" step="0.01" min="0" required value="'+esc(b.amount!=null?b.amount:'')+'"></div><div class="field"><label for="f-date">Goes out on</label><input id="f-date" type="date" required value="'+esc(billDateVal(b,key))+'" data-init="'+esc(billDateVal(b,key))+'"></div></div>';
     o+='<div class="two"><div class="field"><label for="f-repeat">Repeats</label><select id="f-repeat">'+[['monthly','Every month'],['yearly','Every year'],['once','Just once']].map(function(r){return '<option value="'+r[0]+'"'+((b.repeat||'monthly')===r[0]?' selected':'')+'>'+r[1]+'</option>'}).join('')+'</select></div><div class="field"><label for="f-who">Who pays</label><select id="f-who">'+['Manny','Dee','Split'].map(function(w){return '<option'+((b.who||'Split')===w?' selected':'')+'>'+w+'</option>'}).join('')+'</select></div></div>';
-    o+='<div class="field"><label for="f-month">Month (for yearly or one-off bills)</label><input id="f-month" type="month" value="'+esc(b.month||key)+'"></div>';
+    o+='<p class="sub" style="margin:-4px 0 0">'+(b.repeat==='once'?'Just once, on this date.':b.repeat==='yearly'?'Every year on this date.':'Every month on this day'+(b.day?' (the '+ord(b.day)+')':'')+'.')+' Change “Repeats” for yearly or one-off bills.</p>';
     o+='<div class="field"><label for="f-notes">Notes</label><textarea id="f-notes" maxlength="500" placeholder="Account number hint, how it’s paid, contract end…">'+esc(b.notes||'')+'</textarea></div>';
     var files=s.files||[];
     o+='<div class="field"><label>Files &amp; photos</label><div class="files">'+files.map(function(fl,idx){var src=fl.kind==='image'?photoSrc(fl):'';var href=fl.id?fileUrl(fl.id):src;return '<div class="file">'+(src?'<img src="'+src+'" alt="">':IC.file)+(href?'<a href="'+href+'" target="_blank" rel="noopener">'+esc(fl.name)+'</a>':'<span style="flex:1">'+esc(fl.name)+'</span>')+'<button type="button" class="icon-btn plain" style="width:36px;height:36px" data-act="rmFile" data-v="'+idx+'" aria-label="Remove '+esc(fl.name)+'">'+IC.x+'</button></div>'}).join('')+'<label class="btn ghost" style="cursor:pointer">'+(s.uploading?'<span class="spin"></span>Uploading…':IC.clip+' Attach a photo or PDF')+'<input type="file" accept="image/*,application/pdf" class="vh" data-file="attach"></label></div></div>';
@@ -983,6 +987,10 @@ async function handlePhotoFile(file,target){
     sh2.uploading=false;render();
   }
 }
+function isField(el){return el&&(el.tagName==='TEXTAREA'||el.tagName==='SELECT'||(el.tagName==='INPUT'&&!/^(checkbox|radio|button|submit|file)$/.test(el.type)))}
+document.addEventListener('focusin',function(e){if(isField(e.target))document.body.classList.add('kb')});
+document.addEventListener('focusout',function(e){setTimeout(function(){if(!isField(document.activeElement))document.body.classList.remove('kb');if(render._deferred&&!isField(document.activeElement)){render._deferred=false;render()}},120)});
+if(window.visualViewport)visualViewport.addEventListener('resize',function(){if(visualViewport.height>window.innerHeight*0.85&&!isField(document.activeElement))document.body.classList.remove('kb')});
 document.addEventListener('input',function(e){var t=e.target;if(t.getAttribute&&t.getAttribute('data-bud'))budInput(t,false)});
 document.addEventListener('change',function(e){
   var t=e.target;
@@ -992,6 +1000,7 @@ document.addEventListener('change',function(e){
   var f=t.files&&t.files[0];t.value='';handlePhotoFile(f,k);
 });
 document.addEventListener('submit',async function(e){
+  if(isField(document.activeElement))document.activeElement.blur();
   var form=e.target.closest('form[data-form]');if(!form)return;e.preventDefault();
   var kind=form.getAttribute('data-form'),v=function(id){var el=document.getElementById(id);return el?el.value:''},now=Date.now();
   if(kind==='quickAdd'){
@@ -1001,11 +1010,11 @@ document.addEventListener('submit',async function(e){
     return;
   }
   if(kind==='bill'){
-    var s=S.sheet;var nm=v('f-name').trim(),amt=parseFloat(v('f-amount')),day=parseInt(v('f-day'),10),rep=v('f-repeat');
-    if(!nm||!(amt>=0)||!(day>=1&&day<=31)){toast('Add a name, an amount and a due day (1–31).');return}
+    var s=S.sheet;var nm=v('f-name').trim(),amt=parseFloat(v('f-amount')),dv=v('f-date'),day=dv?parseInt(dv.slice(8,10),10):NaN,rep=v('f-repeat');var dEl=document.getElementById('f-date'),dChanged=!!(dEl&&dv&&dv!==dEl.getAttribute('data-init'));
+    if(!nm||!(amt>=0)||!(day>=1&&day<=31)){toast('Add a name, an amount and the date it goes out.');return}
     var ex=s.id?S.bills.find(function(x){return x.id===s.id}):null;
-    var mo=v('f-month')||monthKey(S.monthOff);
-    var body={name:nm,amount:Math.round(amt*100)/100,day:day,repeat:rep,who:v('f-who'),notes:v('f-notes').trim(),month:rep==='monthly'?null:mo,start:ex&&ex.start?ex.start:(rep==='monthly'?monthKey(Math.min(S.monthOff,0)):null),files:s.files||[],paid:ex&&ex.paid?JSON.parse(JSON.stringify(ex.paid)):{},createdAt:ex&&ex.createdAt||now,createdBy:ex&&ex.createdBy||S.me||'',updatedAt:now,example:ex&&ex.example||false};
+    var mo=dv?dv.slice(0,7):monthKey(S.monthOff);
+    var body={name:nm,amount:Math.round(amt*100)/100,day:day,repeat:rep,who:v('f-who'),notes:v('f-notes').trim(),month:rep==='monthly'?null:mo,start:rep!=='monthly'?null:(dChanged||!ex||!ex.start?(dChanged||!ex?mo:ex.start):ex.start),files:s.files||[],paid:ex&&ex.paid?JSON.parse(JSON.stringify(ex.paid)):{},createdAt:ex&&ex.createdAt||now,createdBy:ex&&ex.createdBy||S.me||'',updatedAt:now,example:ex&&ex.example||false};
     var ok2=await write(function(){return s.id?col('bills').doc(s.id).set(body):col('bills').add(body)});
     if(ok2){S.sheet=null;render()}
     return;
@@ -1048,6 +1057,7 @@ document.addEventListener('submit',async function(e){
 });
 document.addEventListener('click',async function(e){
   var el=e.target.closest('[data-act]');if(!el)return;
+  if(isField(document.activeElement)&&!el.closest('[data-bud]'))document.activeElement.blur();
   var a=el.getAttribute('data-act'),val=el.getAttribute('data-v'),id=el.getAttribute('data-id');
   if(a==='backdrop'){if(e.target===el){S.sheet=null;render()}return}
     if(a==='who'){S.me=S.me==='Manny'?'Dee':S.me==='Dee'?'Manny':'';if(S.me)LS.set('515-me',S.me);render();return}
