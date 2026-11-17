@@ -764,7 +764,9 @@ function cmRow(c,key){
 }
 
 /* ---------- Money (our plan) ---------- */
-function budData(){var b=S.budget||{};return {income:(b.income||[]).slice(),groups:(b.groups||[]).map(function(g){return Object.assign({},g,{rows:(g.rows||[]).slice()})}),updatedAt:b.updatedAt,updatedBy:b.updatedBy}}
+function budKey(){return monthKey(S.bmOff||0)}
+function budSrc(key){var all=S.budgets||{};if(all[key])return {data:all[key],own:true};var ks=Object.keys(all).filter(function(k){return /^\d{4}-\d{2}$/.test(k)&&k<key}).sort();if(!ks.length)return null;return {data:all[ks[ks.length-1]],own:false,from:ks[ks.length-1]}}
+function budData(){var src=budSrc(budKey()),b=(src&&src.data)||{};return {income:(b.income||[]).slice(),groups:(b.groups||[]).map(function(g){return Object.assign({},g,{rows:(g.rows||[]).slice()})}),updatedAt:b.updatedAt,updatedBy:b.updatedBy}}
 function numOf(v){var n=parseFloat(String(v==null?'':v).replace(/[£,\s]/g,''));return isFinite(n)?n:0}
 function sumRows(r){return r2((r||[]).reduce(function(t,x){return t+numOf(x.amt)},0))}
 function amtVal(v){return v===''||v==null?'':String(v)}
@@ -775,10 +777,13 @@ function budRow(kind,gid,r){
 function budgetView(){
   var B=budData(),inc=sumRows(B.income);
   var counted=B.groups.filter(function(g){return g.count!==false}),planned=r2(counted.reduce(function(t,g){return t+sumRows(g.rows)},0)),left=r2(inc-planned);
-  var o='<div class="between"><span style="display:flex;flex-direction:column"><h1 class="h1">Money</h1><span class="sub">Our monthly plan'+(B.updatedBy&&B.updatedAt?' · last changed by '+esc(B.updatedBy)+' '+ago(B.updatedAt):'')+'</span></span></div>';
-  if(!S.budget&&!S.loaded.budget)return o+'<div class="card"><p class="muted" style="margin:0">Loading…</p></div>';
+  var key=budKey(),info=mInfo(key),src=budSrc(key);
+  var o='<div class="between"><div class="row" style="gap:2px"><button class="icon-btn plain" data-act="bmonth" data-v="-1" aria-label="Previous month">'+IC.left+'</button><h1 class="h1" style="min-width:0">'+info.name+(info.y!==new Date().getFullYear()?' '+info.y:'')+'</h1><button class="icon-btn plain" data-act="bmonth" data-v="1" aria-label="Next month">'+IC.right+'</button></div><span class="sub" style="text-align:right">Our plan</span></div>';
+  if(!S.loaded.budget)return o+'<div class="card"><p class="muted" style="margin:0">Loading…</p></div>';
+  if(src&&!src.own){var fi=mInfo(src.from);o+='<div style="background:#FFF0C7;border-radius:16px;padding:10px 14px;font-size:13.5px;color:#5A4300">Carried over from <b>'+fi.name+(fi.y!==info.y?' '+fi.y:'')+'</b>. Change anything that’s different — '+info.name+' gets saved as its own month.</div>'}
+  else if(src&&B.updatedBy&&B.updatedAt)o+='<p class="sub" style="margin:-4px 0 0">Last changed by '+esc(B.updatedBy)+' '+ago(B.updatedAt)+'</p>';
   if(!B.income.length&&!B.groups.length){
-    return o+'<div class="card empty"><p class="h2">Plan your month</p><p class="muted" style="margin:0;font-size:14px">Put in what comes in, then what it’s for — rent, bills, groceries, savings. 515 adds it up and shows what’s left.</p><button class="btn" data-act="budStart">Start our plan</button></div>';
+    return o+'<div class="card empty"><p class="h2">Plan '+info.name+'</p><p class="muted" style="margin:0;font-size:14px">Put in what comes in, then what it’s for — rent, bills, groceries, savings. 515 adds it up and shows what’s left.</p><button class="btn" data-act="budStart">Start our plan</button></div>';
   }
   o+='<div class="card" style="background:#2A211B;color:#fff;border:none;display:flex;flex-direction:column;gap:12px">';
   o+='<span style="font-size:14px;font-weight:600;opacity:.85">Left after our plan</span><span style="font-size:44px;font-weight:800;line-height:1;color:'+(left<0?'#FFB4A6':'#FFE08A')+'">'+(left<0?'−':'')+money(Math.abs(left))+'</span>';
@@ -801,9 +806,9 @@ function budgetView(){
 }
 var budTimer=null;
 function budSave(B,now){
-  B.updatedAt=Date.now();B.updatedBy=S.me||'';S.budget=B;
+  B.updatedAt=Date.now();B.updatedBy=S.me||'';var key=budKey();S.budgets=Object.assign({},S.budgets||{});S.budgets[key]=B;
   clearTimeout(budTimer);
-  var go=function(){write(function(){return db.doc('budget/plan').set(S.budget)})};
+  var go=function(){write(function(){return db.doc('budget/'+key).set(S.budgets[key])})};
   if(now)go();else budTimer=setTimeout(go,700);
 }
 function budFind(B,k,g){return k==='inc'?B.income:((B.groups.find(function(x){return x.id===g})||{}).rows)}
@@ -1062,6 +1067,7 @@ document.addEventListener('click',async function(e){
   if(a==='backdrop'){if(e.target===el){S.sheet=null;render()}return}
     if(a==='who'){S.me=S.me==='Manny'?'Dee':S.me==='Dee'?'Manny':'';if(S.me)LS.set('515-me',S.me);render();return}
   if(a==='setMe'){S.me=val;LS.set('515-me',val);render();return}
+  if(a==='bmonth'){clearTimeout(budTimer);if(S.budgets){var kk=budKey();if(S.budgets[kk]){var bk=S.budgets[kk];write(function(){return db.doc('budget/'+kk).set(bk)})}}S.bmOff=(S.bmOff||0)+Number(val);S.budConfirm=null;render();window.scrollTo(0,0);return}
   if(a==='budStart'){var Bs={income:[{id:rid(),name:S.me||'',amt:''},{id:rid(),name:other(),amt:''}],groups:[{id:rid(),name:'Monthly plan',count:true,rows:['Rent','Bills','Groceries','Savings','Spending'].map(function(n){return {id:rid(),name:n,amt:''}})}]};budSave(Bs,true);render();return}
   if(a==='budAddRow'){var Ba=budData(),k=el.getAttribute('data-k'),rows=budFind(Ba,k,el.getAttribute('data-g'));if(!rows)return;var nr={id:rid(),name:'',amt:''};rows.push(nr);budSave(Ba,true);render();var ni=document.getElementById('bn-'+k+'-'+nr.id);if(ni)ni.focus();return}
   if(a==='budDelRow'){var Bd=budData(),rws=budFind(Bd,el.getAttribute('data-k'),el.getAttribute('data-g'));if(!rws)return;var ix=rws.findIndex(function(x){return x.id===id});if(ix>=0)rws.splice(ix,1);budSave(Bd,true);render();return}
@@ -1072,7 +1078,7 @@ document.addEventListener('click',async function(e){
   if(a==='pushOff'){await disablePush();return}
   if(a==='pushLater'){LS.set('515-push-later','1');render();toast('You can turn them on any time under You');return}
   if(a==='pushTest'){var tr=await sb.functions.invoke('home-push',{body:{action:'test'}});toast(tr.error?'Test didn\u2019t send \u2014 try turning notifications off and on':'Test sent \u2014 check your lock screen');return}
-  if(a==='tab'){S.tab=val;if(val==='money'&&S.tab==='money'&&e.isTrusted&&el.closest('main'))S.monthOff=0;S.sheet=null;render();window.scrollTo(0,0);return}
+  if(a==='tab'){if(val==='budget'&&S.tab!=='budget')S.bmOff=0;S.tab=val;if(val==='money'&&S.tab==='money'&&e.isTrusted&&el.closest('main'))S.monthOff=0;S.sheet=null;render();window.scrollTo(0,0);return}
   if(a==='month'){S.monthOff+=Number(val);render();return}
   if(a==='filter'){S.shopFilter=val;render();return}
   if(a==='close'){S.sheet=null;render();return}
@@ -1172,7 +1178,7 @@ async function startApp(){
   db.doc('finance/joint').onSnapshot(function(d){S.fin=d.exists?d.data():null;render()});
   db.doc('finance/prefs').onSnapshot(function(d){S.finPrefs=d.exists?d.data():{};render()});
   db.doc('finance/status').onSnapshot(function(d){S.mstat=d.exists?d.data():null;render()});
-  db.doc('budget/plan').onSnapshot(function(d){S.budget=d.exists?d.data():null;S.loaded.budget=true;render()});
+  col('budget').onSnapshot(function(snap){var mm={};snap.docs.forEach(function(d){mm[d.id]=d.data()});S.budgets=mm;S.loaded.budget=true;render()});
   db.doc('home/note').onSnapshot(function(d){S.note=d.exists?d.data():null;render()});
   checkPush();
   var hsh=location.hash;goHash(hsh);
