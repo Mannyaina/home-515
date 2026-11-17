@@ -79,12 +79,13 @@ body[data-theme=B] .tick{border-radius:10px;width:32px;height:32px;margin:6px}
 .chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
 .bud-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)}
 .bud-row:last-child{border-bottom:none}
-.bud-in{flex:1;min-width:0;border:none;background:transparent;font:inherit;font-size:15.5px;color:var(--ink);padding:8px 0;outline:none}
+.bud-in{flex:1;min-width:0;border:none;background:transparent;font:inherit;font-size:16px;color:var(--ink);padding:10px 0;outline:none;-webkit-appearance:none;border-radius:0}
 .bud-in:focus{border-bottom:1.5px solid var(--primary)}
 .bud-amt{display:flex;align-items:center;gap:1px;background:var(--bg);border-radius:12px;padding:0 10px;min-height:42px;font-weight:700;font-family:var(--head)}
-.bud-amt input{width:78px;border:none;background:transparent;font:inherit;font-size:16px;text-align:right;color:var(--ink);outline:none}
-.bud-x{width:34px;height:34px;border:none;background:none;color:var(--muted);font-size:20px;line-height:1;cursor:pointer;border-radius:10px;flex-shrink:0}
-.bud-title{border:none;background:transparent;font:inherit;font-family:var(--head);font-size:18px;font-weight:800;color:var(--ink);min-width:0;flex:1;outline:none;padding:4px 0}
+.bud-amt input{width:92px;border:none;background:transparent;font:inherit;font-size:16px;text-align:right;color:var(--ink);outline:none;padding:10px 0;-webkit-appearance:none}
+.bud-x{min-width:36px;height:36px;border:none;background:none;color:var(--muted);font-size:20px;line-height:1;cursor:pointer;border-radius:10px;flex-shrink:0;padding:0 6px}
+.bud-x.sure{background:#C23A24;color:#fff;font-size:13px;font-weight:700}
+.bud-title{border:none;background:transparent;font:inherit;font-family:var(--head);font-size:18px;font-weight:800;color:var(--ink);min-width:0;flex:1;outline:none;padding:6px 0;-webkit-appearance:none;border-radius:0}
 .bud-title:focus{border-bottom:1.5px solid var(--primary)}
 .when{display:block;font-size:12.5px;font-weight:600;color:#0B6A6C;margin-top:1px}
 .when.late{color:#B23A22}
@@ -463,7 +464,7 @@ async function storeFile(file){
 /* ---------- render ---------- */
 function render(){
   if(drag){render._pending=true;return}
-  var ae0=document.activeElement;if(ae0&&(ae0.tagName==='SELECT'||(ae0.tagName==='INPUT'&&/^(date|month|time|datetime-local)$/.test(ae0.type)))){render._deferred=true;return}
+  var ae0=document.activeElement;if(ae0&&((ae0.getAttribute&&ae0.getAttribute('data-bud'))||ae0.tagName==='SELECT'||(ae0.tagName==='INPUT'&&/^(date|month|time|datetime-local)$/.test(ae0.type)))){render._deferred=true;return}
   document.body.setAttribute('data-theme',S.theme);
   var keep={},act=document.activeElement,focusId=act&&act.id,selS=null,selE=null;
   try{if(act&&act.selectionStart!=null){selS=act.selectionStart;selE=act.selectionEnd}}catch(e){}
@@ -772,7 +773,7 @@ function sumRows(r){return r2((r||[]).reduce(function(t,x){return t+numOf(x.amt)
 function amtVal(v){return v===''||v==null?'':String(v)}
 function budRow(kind,gid,r){
   var base=kind+'-'+r.id;
-  return '<div class="bud-row"><input class="bud-in" id="bn-'+base+'" data-bud="name" data-k="'+kind+'" data-g="'+esc(gid||'')+'" data-r="'+esc(r.id)+'" value="'+esc(r.name||'')+'" placeholder="'+(kind==='inc'?'Who or what':'What for')+'" maxlength="40" aria-label="Name"><label class="bud-amt">£<input id="ba-'+base+'" data-bud="amt" data-k="'+kind+'" data-g="'+esc(gid||'')+'" data-r="'+esc(r.id)+'" value="'+esc(amtVal(r.amt))+'" inputmode="decimal" placeholder="0" aria-label="Amount for '+esc(r.name||'this line')+'"></label><button class="bud-x" data-act="budDelRow" data-k="'+kind+'" data-g="'+esc(gid||'')+'" data-id="'+esc(r.id)+'" aria-label="Remove '+esc(r.name||'line')+'">×</button></div>';
+  return '<div class="bud-row"><input class="bud-in" id="bn-'+base+'" data-bud="name" data-k="'+kind+'" data-g="'+esc(gid||'')+'" data-r="'+esc(r.id)+'" value="'+esc(r.name||'')+'" placeholder="'+(kind==='inc'?'Who or what':'What for')+'" maxlength="40" aria-label="Name" enterkeyhint="next" autocomplete="off" autocorrect="off"><label class="bud-amt">£<input id="ba-'+base+'" data-bud="amt" data-k="'+kind+'" data-g="'+esc(gid||'')+'" data-r="'+esc(r.id)+'" value="'+esc(amtVal(r.amt))+'" inputmode="decimal" enterkeyhint="next" autocomplete="off" placeholder="0" aria-label="Amount for '+esc(r.name||'this line')+'"></label><button class="bud-x'+(S.budDelSure===r.id?' sure':'')+'" data-act="budDelRow" data-k="'+kind+'" data-g="'+esc(gid||'')+'" data-id="'+esc(r.id)+'" aria-label="Remove '+esc(r.name||'line')+'">'+(S.budDelSure===r.id?'Remove?':'×')+'</button></div>';
 }
 function budgetView(){
   var B=budData(),inc=sumRows(B.income);
@@ -786,14 +787,14 @@ function budgetView(){
     return o+'<div class="card empty"><p class="h2">Plan '+info.name+'</p><p class="muted" style="margin:0;font-size:14px">Put in what comes in, then what it’s for — rent, bills, groceries, savings. 515 adds it up and shows what’s left.</p><button class="btn" data-act="budStart">Start our plan</button></div>';
   }
   o+='<div class="card" style="background:#2A211B;color:#fff;border:none;display:flex;flex-direction:column;gap:12px">';
-  o+='<span style="font-size:14px;font-weight:600;opacity:.85">Left after our plan</span><span style="font-size:44px;font-weight:800;line-height:1;color:'+(left<0?'#FFB4A6':'#FFE08A')+'">'+(left<0?'−':'')+money(Math.abs(left))+'</span>';
-  o+='<div style="display:flex;flex-direction:column;gap:8px;font-size:14px;border-top:1px solid rgba(255,255,255,.18);padding-top:12px"><div class="between"><span style="opacity:.85">Coming in</span><b>'+money(inc)+'</b></div><div class="between"><span style="opacity:.85">Planned out</span><b style="color:#FFB4A6">−'+money(planned)+'</b></div></div>';
+  o+='<span style="font-size:14px;font-weight:600;opacity:.85">Left after our plan</span><span data-bt="left" style="font-size:44px;font-weight:800;line-height:1;color:'+(left<0?'#FFB4A6':'#FFE08A')+'">'+(left<0?'−':'')+money(Math.abs(left))+'</span>';
+  o+='<div style="display:flex;flex-direction:column;gap:8px;font-size:14px;border-top:1px solid rgba(255,255,255,.18);padding-top:12px"><div class="between"><span style="opacity:.85">Coming in</span><b data-bt="in">'+money(inc)+'</b></div><div class="between"><span style="opacity:.85">Planned out</span><b data-bt="out" style="color:#FFB4A6">−'+money(planned)+'</b></div></div>';
   if(inc>0&&planned>0){o+='<div style="display:flex;height:10px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.15)">'+counted.map(function(g,i){var t=sumRows(g.rows);return t>0?'<span title="'+esc(g.name)+'" style="width:'+Math.min(100,t/inc*100)+'%;background:'+CCOLORS[i%CCOLORS.length]+'"></span>':''}).join('')+'</div><div style="display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;opacity:.9">'+counted.map(function(g,i){return '<span><span style="display:inline-block;width:8px;height:8px;border-radius:4px;background:'+CCOLORS[i%CCOLORS.length]+';margin-right:5px"></span>'+esc(g.name||'List')+' '+Math.round(sumRows(g.rows)/inc*100)+'%</span>'}).join('')+'</div>'}
   o+='</div>';
-  o+='<section class="card" style="padding:12px 14px"><div class="between"><h2 class="h2">Coming in</h2><b class="amt" style="color:#0B6A6C">'+money(inc)+'</b></div><div>'+B.income.map(function(r){return budRow('inc','',r)}).join('')+'</div><button class="link-btn" style="margin-top:8px" data-act="budAddRow" data-k="inc">+ Add income</button></section>';
+  o+='<section class="card" style="padding:12px 14px"><div class="between"><h2 class="h2">Coming in</h2><b class="amt" data-bt="in" style="color:#0B6A6C">'+money(inc)+'</b></div><div>'+B.income.map(function(r){return budRow('inc','',r)}).join('')+'</div><button class="link-btn" style="margin-top:8px" data-act="budAddRow" data-k="inc">+ Add income</button></section>';
   B.groups.forEach(function(g,gi){
     var t=sumRows(g.rows),on=g.count!==false;
-    o+='<section class="card" style="padding:12px 14px'+(on?'':';background:var(--bg)')+'"><div class="between" style="gap:8px"><input class="bud-title" id="bt-'+esc(g.id)+'" data-bud="title" data-g="'+esc(g.id)+'" value="'+esc(g.name||'')+'" placeholder="List name" maxlength="30" aria-label="List name"><b class="amt">'+money(t)+'</b></div>';
+    o+='<section class="card" style="padding:12px 14px'+(on?'':';background:var(--bg)')+'"><div class="between" style="gap:8px"><input class="bud-title" id="bt-'+esc(g.id)+'" data-bud="title" data-g="'+esc(g.id)+'" value="'+esc(g.name||'')+'" placeholder="List name" maxlength="30" aria-label="List name"><b class="amt" data-bt="g:'+esc(g.id)+'">'+money(t)+'</b></div>';
     o+='<div>'+g.rows.map(function(r){return budRow('row',g.id,r)}).join('')+'</div>';
     o+='<div class="between" style="margin-top:10px;gap:8px;flex-wrap:wrap"><button class="link-btn" data-act="budAddRow" data-k="row" data-g="'+esc(g.id)+'">+ Add line</button><span class="row" style="gap:6px">';
     o+='<button class="chip" style="min-height:34px;font-size:12.5px" data-act="budCount" data-g="'+esc(g.id)+'" aria-pressed="'+on+'">'+(on?'Counted in total':'Not counted')+'</button>';
@@ -804,19 +805,27 @@ function budgetView(){
   o+='<p class="sub" style="margin:0;text-align:center">Lists marked “Not counted” are notes, like a breakdown of your bills — they don’t come off what’s left.</p>';
   return o;
 }
-var budTimer=null;
+var budTimer=null,budPending=false;
 function budSave(B,now){
   B.updatedAt=Date.now();B.updatedBy=S.me||'';var key=budKey();S.budgets=Object.assign({},S.budgets||{});S.budgets[key]=B;
   clearTimeout(budTimer);
-  var go=function(){write(function(){return db.doc('budget/'+key).set(S.budgets[key])})};
-  if(now)go();else budTimer=setTimeout(go,700);
+  var go=function(){budPending=false;write(function(){return db.doc('budget/'+key).set(S.budgets[key])})};
+  if(now)go();else{budPending=true;budTimer=setTimeout(go,1200)}
 }
 function budFind(B,k,g){return k==='inc'?B.income:((B.groups.find(function(x){return x.id===g})||{}).rows)}
 function budInput(t,commit){
   var f=t.getAttribute('data-bud'),k=t.getAttribute('data-k'),g=t.getAttribute('data-g'),r=t.getAttribute('data-r'),B=budData();
   if(f==='title'){var gg=B.groups.find(function(x){return x.id===g});if(!gg)return;gg.name=t.value}
   else{var rows=budFind(B,k,g);if(!rows)return;var i=rows.findIndex(function(x){return x.id===r});if(i<0)return;var row=Object.assign({},rows[i]);if(f==='name')row.name=t.value;else row.amt=t.value.replace(/[^0-9.]/g,'')===''?'':numOf(t.value);rows[i]=row}
-  budSave(B,commit);render();
+  budSave(B,commit);
+  if(commit)render();else budTotals(B);
+}
+function budTotals(B){
+  var inc=sumRows(B.income),planned=r2(B.groups.filter(function(g){return g.count!==false}).reduce(function(t,g){return t+sumRows(g.rows)},0)),left=r2(inc-planned);
+  document.querySelectorAll('[data-bt]').forEach(function(el){var k=el.getAttribute('data-bt');
+    if(k==='left'){el.textContent=(left<0?'−':'')+money(Math.abs(left));el.style.color=left<0?'#FFB4A6':'#FFE08A'}
+    else if(k==='in')el.textContent=money(inc);else if(k==='out')el.textContent='−'+money(planned);
+    else if(k.slice(0,2)==='g:'){var g=B.groups.find(function(x){return x.id===k.slice(2)});if(g)el.textContent=money(sumRows(g.rows))}});
 }
 function budSeed(){return {income:[{id:rid(),name:'Dee',amt:2950},{id:rid(),name:'Manny',amt:1700}],groups:[
   {id:rid(),name:'Monthly plan',count:true,rows:[['Outgoings',1183],['Rent',1200],['Bills',400],['Groceries',350],['Savings',500],['Spendings',800]].map(function(x){return {id:rid(),name:x[0],amt:x[1]}})},
@@ -996,6 +1005,8 @@ function isField(el){return el&&(el.tagName==='TEXTAREA'||el.tagName==='SELECT'|
 document.addEventListener('focusin',function(e){if(isField(e.target))document.body.classList.add('kb')});
 document.addEventListener('focusout',function(e){setTimeout(function(){if(!isField(document.activeElement))document.body.classList.remove('kb');if(render._deferred&&!isField(document.activeElement)){render._deferred=false;render()}},120)});
 if(window.visualViewport)visualViewport.addEventListener('resize',function(){if(visualViewport.height>window.innerHeight*0.85&&!isField(document.activeElement))document.body.classList.remove('kb')});
+document.addEventListener('keydown',function(e){var t=e.target;if(e.key==='Enter'&&t.getAttribute&&t.getAttribute('data-bud')){e.preventDefault();var all=[].slice.call(document.querySelectorAll('input[data-bud]'));var n=all[all.indexOf(t)+1];if(n)n.focus();else t.blur()}});
+document.addEventListener('focusin',function(e){var t=e.target;if(t.getAttribute&&t.getAttribute('data-bud')==='amt')setTimeout(function(){try{t.select()}catch(x){}},0)});
 document.addEventListener('input',function(e){var t=e.target;if(t.getAttribute&&t.getAttribute('data-bud'))budInput(t,false)});
 document.addEventListener('change',function(e){
   var t=e.target;
@@ -1070,7 +1081,7 @@ document.addEventListener('click',async function(e){
   if(a==='bmonth'){clearTimeout(budTimer);if(S.budgets){var kk=budKey();if(S.budgets[kk]){var bk=S.budgets[kk];write(function(){return db.doc('budget/'+kk).set(bk)})}}S.bmOff=(S.bmOff||0)+Number(val);S.budConfirm=null;render();window.scrollTo(0,0);return}
   if(a==='budStart'){var Bs={income:[{id:rid(),name:S.me||'',amt:''},{id:rid(),name:other(),amt:''}],groups:[{id:rid(),name:'Monthly plan',count:true,rows:['Rent','Bills','Groceries','Savings','Spending'].map(function(n){return {id:rid(),name:n,amt:''}})}]};budSave(Bs,true);render();return}
   if(a==='budAddRow'){var Ba=budData(),k=el.getAttribute('data-k'),rows=budFind(Ba,k,el.getAttribute('data-g'));if(!rows)return;var nr={id:rid(),name:'',amt:''};rows.push(nr);budSave(Ba,true);render();var ni=document.getElementById('bn-'+k+'-'+nr.id);if(ni)ni.focus();return}
-  if(a==='budDelRow'){var Bd=budData(),rws=budFind(Bd,el.getAttribute('data-k'),el.getAttribute('data-g'));if(!rws)return;var ix=rws.findIndex(function(x){return x.id===id});if(ix>=0)rws.splice(ix,1);budSave(Bd,true);render();return}
+  if(a==='budDelRow'){if(S.budDelSure!==id){S.budDelSure=id;render();setTimeout(function(){if(S.budDelSure===id){S.budDelSure=null;render()}},3500);return}S.budDelSure=null;var Bd=budData(),rws=budFind(Bd,el.getAttribute('data-k'),el.getAttribute('data-g'));if(!rws)return;var ix=rws.findIndex(function(x){return x.id===id});if(ix>=0)rws.splice(ix,1);budSave(Bd,true);render();return}
   if(a==='budAddGroup'){var Bg=budData(),ng={id:rid(),name:'',count:true,rows:[{id:rid(),name:'',amt:''}]};Bg.groups.push(ng);budSave(Bg,true);render();var ti=document.getElementById('bt-'+ng.id);if(ti)ti.focus();return}
   if(a==='budCount'){var Bc=budData(),gc=Bc.groups.find(function(x){return x.id===el.getAttribute('data-g')});if(!gc)return;gc.count=gc.count===false;budSave(Bc,true);render();return}
   if(a==='budDelGroup'){var gid=el.getAttribute('data-g');if(S.budConfirm!==gid){S.budConfirm=gid;render();setTimeout(function(){if(S.budConfirm===gid){S.budConfirm=null;render()}},4000);return}var Bx=budData();Bx.groups=Bx.groups.filter(function(x){return x.id!==gid});S.budConfirm=null;budSave(Bx,true);render();return}
@@ -1178,7 +1189,7 @@ async function startApp(){
   db.doc('finance/joint').onSnapshot(function(d){S.fin=d.exists?d.data():null;render()});
   db.doc('finance/prefs').onSnapshot(function(d){S.finPrefs=d.exists?d.data():{};render()});
   db.doc('finance/status').onSnapshot(function(d){S.mstat=d.exists?d.data():null;render()});
-  col('budget').onSnapshot(function(snap){var mm={};snap.docs.forEach(function(d){mm[d.id]=d.data()});S.budgets=mm;S.loaded.budget=true;render()});
+  col('budget').onSnapshot(function(snap){var mm={};snap.docs.forEach(function(d){mm[d.id]=d.data()});if(budPending&&S.budgets&&S.budgets[budKey()])mm[budKey()]=S.budgets[budKey()];S.budgets=mm;S.loaded.budget=true;render()});
   db.doc('home/note').onSnapshot(function(d){S.note=d.exists?d.data():null;render()});
   checkPush();
   var hsh=location.hash;goHash(hsh);
